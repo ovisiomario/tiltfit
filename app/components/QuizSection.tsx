@@ -9,11 +9,11 @@ export default function QuizSection() {
         Fitness Percentile Quiz
       </div>
       <h2 className="mt-3 text-2xl font-semibold">
-        Calculate your TiltFit Rank in real time.
+        Unlock your TiltFit Rank in under one minute.
       </h2>
       <p className="mt-2 max-w-2xl text-sm">
-        TiltFit connects to your match history and creates fitness challenges
-        from every game.
+        Afterward we will build fitness challenges from your in-game performance
+        so you can level up in real life too.
       </p>
 
       <div className="mt-6 flex justify-center">

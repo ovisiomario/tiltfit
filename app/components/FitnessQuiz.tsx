@@ -176,6 +176,10 @@ type Result = {
   rank: string;
   breakdown: Record<Metric, number>;
   categoryRanks: Record<Metric, string>;
+  profile: {
+    role: string;
+    description: string;
+  };
 };
 
 function pctPoints(values: number[]): PercentilePoint[] {
@@ -425,10 +429,6 @@ export default function FitnessQuiz() {
               {stepIndex === steps.length - 1 ? "See my rank" : "Next"}
             </button>
           </div>
-          <p className="mt-4 text-sm text-[#9aa6bf]">
-            Percentiles are calculated from age- and sex-specific fitness norms. Replace
-            these defaults with validated tables for production use.
-          </p>
         </div>
       ) : pendingResult && !result ? (
         <div className="w-full max-w-xl">
@@ -806,19 +806,25 @@ function ResultCard({
         your age.
       </p>
       <div className="mt-6 grid gap-3 text-sm text-[#9aa6bf] sm:grid-cols-2">
-        {Object.entries(result.breakdown).map(([key, value]) => (
+        {Object.entries(result.breakdown).map(([key]) => (
           <div key={key} className="rounded-xl border border-[#262d3a] px-4 py-3">
             <span className="uppercase tracking-[0.2em] text-[0.65rem] text-[#9aa6bf]">
               {key}
             </span>
-            <div className="mt-2 text-lg font-semibold text-[#e6ecf7]">
-              {value.toFixed(1)}%
-            </div>
             <div className="mt-1 text-sm text-[#9aa6bf]">
               Rank: {result.categoryRanks[key as Metric]}
             </div>
           </div>
         ))}
+      </div>
+      <div className="mt-6 rounded-xl border border-[#262d3a] px-4 py-3">
+        <div className="text-xs uppercase tracking-[0.2em] text-[#9aa6bf]">
+          LoL Role Profile
+        </div>
+        <div className="mt-2 text-lg font-semibold text-[#e6ecf7]">
+          {result.profile.role}
+        </div>
+        <p className="mt-1 text-sm text-[#9aa6bf]">{result.profile.description}</p>
       </div>
       <button
         className="mt-6 rounded-xl border border-[#262d3a] px-5 py-3 text-sm font-semibold text-[#e6ecf7]"
@@ -939,12 +945,61 @@ function calculateResult(state: QuizState): Result {
     },
     {} as Record<Metric, string>
   );
+  const profile = getChampionProfile({
+    heightCm,
+    weightKg,
+    bmi,
+    breakdown
+  });
 
   return {
     weightedPercentile,
     rank: rankFromPercentile(weightedPercentile),
     breakdown,
-    categoryRanks
+    categoryRanks,
+    profile
+  };
+}
+
+function getChampionProfile({
+  heightCm,
+  weightKg,
+  bmi,
+  breakdown
+}: {
+  heightCm: number;
+  weightKg: number;
+  bmi: number;
+  breakdown: Record<Metric, number>;
+}) {
+  const strengthScore =
+    (breakdown.pushups + breakdown.pullups + breakdown.squats + breakdown.plank) / 4;
+  const speedScore = breakdown.run;
+  const bodyScore = breakdown.body;
+
+  const tall = heightCm >= 180;
+  const heavy = bmi >= 27 || weightKg >= 90;
+
+  if (strengthScore >= 70 && (heavy || tall) && speedScore <= 45) {
+    return {
+      role: "Tank",
+      description:
+        "High power and durability. You excel at raw strength and can soak up long sessions."
+    };
+  }
+
+  if (speedScore >= 70 && strengthScore >= 55 && bodyScore >= 60) {
+    return {
+      role: "Assassin",
+      description:
+        "Fast, explosive, and efficient. You win with speed, precision, and clean reps."
+    };
+  }
+
+  return {
+    role: "Mage",
+    description:
+      "Balanced and consistent. You scale through smart pacing, control, and steady gains."
   };
 }
 
