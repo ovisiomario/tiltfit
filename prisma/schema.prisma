@@ -1,0 +1,18 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model WaitlistEntry {
+  id                 String   @id @default(cuid())
+  email              String
+  riotId             String
+  riotRegion         String
+  weightedPercentile Float
+  rank               String
+  createdAt          DateTime @default(now())
+}

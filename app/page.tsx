@@ -129,6 +129,15 @@ export default function Home() {
           </details>
           <details className="rounded-xl border border-[#262d3a] bg-[#131722] p-4">
             <summary className="cursor-pointer text-base font-semibold">
+              Is this medical advice?
+            </summary>
+            <p className="mt-2 text-sm">
+              No. This is a fun fitness challenge and the scores are estimates.
+              Always listen to your body.
+            </p>
+          </details>
+          <details className="rounded-xl border border-[#262d3a] bg-[#131722] p-4">
+            <summary className="cursor-pointer text-base font-semibold">
               I am not fit. Is this judging me?
             </summary>
             <p className="mt-2 text-sm">

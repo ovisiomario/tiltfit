@@ -323,13 +323,9 @@ export default function FitnessQuiz() {
   const [emailTouched, setEmailTouched] = useState(false);
   const [riotId, setRiotId] = useState("");
   const [riotRegion, setRiotRegion] = useState("NA1");
-  const [matchResult, setMatchResult] = useState<{
-    gameName: string;
-    tagLine: string;
-    matches: string[];
-  } | null>(null);
-  const [matchError, setMatchError] = useState<string | null>(null);
-  const [matchLoading, setMatchLoading] = useState(false);
+  const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
+  const [waitlistError, setWaitlistError] = useState<string | null>(null);
+  const [waitlistLoading, setWaitlistLoading] = useState(false);
 
   const currentStep = steps[stepIndex];
 
@@ -392,9 +388,9 @@ export default function FitnessQuiz() {
     setEmailTouched(false);
     setRiotId("");
     setRiotRegion("NA1");
-    setMatchResult(null);
-    setMatchError(null);
-    setMatchLoading(false);
+    setWaitlistError(null);
+    setWaitlistLoading(false);
+    setWaitlistSubmitted(false);
   }
 
   return (
@@ -459,31 +455,36 @@ export default function FitnessQuiz() {
             onRiotIdChange={setRiotId}
             onRiotRegionChange={setRiotRegion}
             onFetchMatches={async () => {
-              setMatchLoading(true);
-              setMatchError(null);
-              setMatchResult(null);
+              setWaitlistLoading(true);
+              setWaitlistError(null);
               try {
-                const response = await fetch("/api/riot/matches", {
+                const response = await fetch("/api/waitlist", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ riotId, region: riotRegion })
+                  body: JSON.stringify({
+                    email,
+                    riotId,
+                    riotRegion,
+                    weightedPercentile: result.weightedPercentile,
+                    rank: result.rank
+                  })
                 });
                 const payload = await response.json();
                 if (!response.ok) {
-                  throw new Error(payload?.error ?? "Unable to fetch matches.");
+                  throw new Error(payload?.error ?? "Unable to save your entry.");
                 }
-                setMatchResult(payload);
+                setWaitlistSubmitted(true);
               } catch (error) {
-                setMatchError(
+                setWaitlistError(
                   error instanceof Error ? error.message : "Something went wrong."
                 );
               } finally {
-                setMatchLoading(false);
+                setWaitlistLoading(false);
               }
             }}
-            matchResult={matchResult}
-            matchError={matchError}
-            matchLoading={matchLoading}
+            waitlistError={waitlistError}
+            waitlistLoading={waitlistLoading}
+            waitlistSubmitted={waitlistSubmitted}
           />
         </div>
       ) : null}
@@ -779,9 +780,9 @@ function ResultCard({
   onRiotIdChange,
   onRiotRegionChange,
   onFetchMatches,
-  matchResult,
-  matchError,
-  matchLoading
+  waitlistError,
+  waitlistLoading,
+  waitlistSubmitted
 }: {
   result: Result;
   onReset: () => void;
@@ -790,9 +791,9 @@ function ResultCard({
   onRiotIdChange: (value: string) => void;
   onRiotRegionChange: (value: string) => void;
   onFetchMatches: () => void;
-  matchResult: { gameName: string; tagLine: string; matches: string[] } | null;
-  matchError: string | null;
-  matchLoading: boolean;
+  waitlistError: string | null;
+  waitlistLoading: boolean;
+  waitlistSubmitted: boolean;
 }) {
   return (
     <div className="text-center">
@@ -827,71 +828,83 @@ function ResultCard({
         Retake quiz
       </button>
       <div className="mt-8 rounded-2xl border border-[#262d3a] bg-[#0f1320] p-5">
-        <div className="text-xs uppercase tracking-[0.3em] text-[#9aa6bf]">
-          Start the TiltFit Challenge
-        </div>
-        <h4 className="mt-3 text-xl font-semibold">Connect your Riot account</h4>
-        <p className="mt-2">
-          Add your Riot ID so we can pull your match history and turn every loss
-          into workouts.
-        </p>
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <label className="flex flex-col gap-2 text-sm font-semibold md:col-span-2">
-            Riot ID (Name#TAG)
-            <input
-              className="w-full rounded-xl border border-[#262d3a] bg-[#0f1320] px-4 py-3 text-sm text-[#e6ecf7]"
-              value={riotId}
-              onChange={(event) => onRiotIdChange(event.target.value)}
-              placeholder="Summoner#TAG"
-            />
-          </label>
-          <label className="flex flex-col gap-2 text-sm font-semibold">
-            Region
-            <select
-              className="w-full rounded-xl border border-[#262d3a] bg-[#0f1320] px-4 py-3 text-sm text-[#e6ecf7]"
-              value={riotRegion}
-              onChange={(event) => onRiotRegionChange(event.target.value)}
-            >
-              <option value="NA1">NA</option>
-              <option value="EUW1">EUW</option>
-              <option value="EUN1">EUNE</option>
-              <option value="KR">KR</option>
-              <option value="BR1">BR</option>
-              <option value="LA1">LAN</option>
-              <option value="LA2">LAS</option>
-              <option value="OC1">OCE</option>
-              <option value="JP1">JP</option>
-              <option value="RU">RU</option>
-              <option value="TR1">TR</option>
-            </select>
-          </label>
-        </div>
-        <button
-          className="mt-4 rounded-xl bg-gradient-to-r from-[#6cffb1] to-[#67a7ff] px-6 py-3 text-sm font-bold text-[#07111e] shadow-[0_14px_30px_rgba(90,255,190,0.22)]"
-          type="button"
-          onClick={onFetchMatches}
-          disabled={matchLoading || riotId.trim().length === 0}
-        >
-          {matchLoading ? "Connecting..." : "Fetch match history"}
-        </button>
-        {matchError ? (
-          <p className="mt-3 text-sm text-[#ff6b6b]">{matchError}</p>
-        ) : null}
-        {matchResult ? (
-          <div className="mt-4 rounded-xl border border-[#262d3a] px-4 py-3 text-sm text-[#9aa6bf]">
-            <p className="text-[#e6ecf7]">
-              Connected: {matchResult.gameName}#{matchResult.tagLine}
+        {waitlistSubmitted ? (
+          <div className="text-center">
+            <div className="text-xs uppercase tracking-[0.3em] text-[#9aa6bf]">
+              Waitlist Locked
+            </div>
+            <h4 className="mt-3 text-xl font-semibold">Thanks for queueing up</h4>
+            <p className="mt-2">
+              We're collecting interest while we build the full League sync.
+              You'll be the first to know, and you'll get the app free for being
+              early.
             </p>
-            <p className="mt-1">
-              Loaded {matchResult.matches.length} recent matches. Ready to start
-              the challenge.
+            <p className="mt-3 text-sm text-[#9aa6bf]">
+              GG WP. We'll ping you when the challenge goes live.
             </p>
           </div>
-        ) : null}
+        ) : (
+          <>
+            <div className="text-xs uppercase tracking-[0.3em] text-[#9aa6bf]">
+              Start the TiltFit Challenge
+            </div>
+            <h4 className="mt-3 text-xl font-semibold">Connect your Riot account</h4>
+            <p className="mt-2">
+              Add your Riot ID so we can pull your match history and turn every loss
+              into workouts.
+            </p>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <label className="flex flex-col gap-2 text-sm font-semibold md:col-span-2">
+                Riot ID (Name#TAG)
+                <input
+                  className="w-full rounded-xl border border-[#262d3a] bg-[#0f1320] px-4 py-3 text-sm text-[#e6ecf7]"
+                  value={riotId}
+                  onChange={(event) => onRiotIdChange(event.target.value)}
+                  placeholder="Summoner#TAG"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold">
+                Region
+                <select
+                  className="w-full rounded-xl border border-[#262d3a] bg-[#0f1320] px-4 py-3 text-sm text-[#e6ecf7]"
+                  value={riotRegion}
+                  onChange={(event) => onRiotRegionChange(event.target.value)}
+                >
+                  <option value="NA1">NA</option>
+                  <option value="EUW1">EUW</option>
+                  <option value="EUN1">EUNE</option>
+                  <option value="KR">KR</option>
+                  <option value="BR1">BR</option>
+                  <option value="LA1">LAN</option>
+                  <option value="LA2">LAS</option>
+                  <option value="OC1">OCE</option>
+                  <option value="JP1">JP</option>
+                  <option value="RU">RU</option>
+                  <option value="TR1">TR</option>
+                </select>
+              </label>
+            </div>
+            <button
+              className="mt-4 rounded-xl bg-gradient-to-r from-[#6cffb1] to-[#67a7ff] px-6 py-3 text-sm font-bold text-[#07111e] shadow-[0_14px_30px_rgba(90,255,190,0.22)]"
+              type="button"
+              onClick={onFetchMatches}
+              disabled={waitlistLoading || riotId.trim().length === 0}
+            >
+              {waitlistLoading ? "Saving..." : "Join the waitlist"}
+            </button>
+            {waitlistError ? (
+              <p className="mt-3 text-sm text-[#ff6b6b]">{waitlistError}</p>
+            ) : null}
+          </>
+        )}
       </div>
+      <p className="mt-6 text-xs text-[#9aa6bf]">
+        Estimates only, not medical advice. Use what feels safe for your body.
+      </p>
     </div>
   );
 }
+
 
 function calculateResult(state: QuizState): Result {
   const age = toNumber(state.age);
