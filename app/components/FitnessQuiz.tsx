@@ -449,7 +449,7 @@ export default function FitnessQuiz() {
             }}
           />
         </div>
-      ) : (
+      ) : result ? (
         <div className="w-full max-w-xl">
           <ResultCard
             result={result}
@@ -486,7 +486,7 @@ export default function FitnessQuiz() {
             matchLoading={matchLoading}
           />
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
