@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Sex = "male" | "female" | "other";
 type UnitHeight = "cm" | "in";
@@ -330,6 +330,7 @@ export default function FitnessQuiz() {
   const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
   const [waitlistError, setWaitlistError] = useState<string | null>(null);
   const [waitlistLoading, setWaitlistLoading] = useState(false);
+  const [revealReady, setRevealReady] = useState(false);
 
   const currentStep = steps[stepIndex];
 
@@ -395,7 +396,18 @@ export default function FitnessQuiz() {
     setWaitlistError(null);
     setWaitlistLoading(false);
     setWaitlistSubmitted(false);
+    setRevealReady(false);
   }
+
+  useEffect(() => {
+    if (!result) {
+      setRevealReady(false);
+      return;
+    }
+    setRevealReady(false);
+    const timer = setTimeout(() => setRevealReady(true), 1400);
+    return () => clearTimeout(timer);
+  }, [result]);
 
   return (
     <div className="flex flex-col items-center rounded-2xl border border-[#262d3a] bg-[#131722] p-6 text-center shadow-[0_20px_50px_rgba(0,0,0,0.35)]">
@@ -485,6 +497,7 @@ export default function FitnessQuiz() {
             waitlistError={waitlistError}
             waitlistLoading={waitlistLoading}
             waitlistSubmitted={waitlistSubmitted}
+            revealReady={revealReady}
           />
         </div>
       ) : null}
@@ -658,11 +671,11 @@ function renderStep(
     case "squats":
       return (
         <InputField
-          label="Squats (max in 1 min)"
+          label="Wall sit hold (max seconds)"
           type="number"
           value={state.squats}
           onChange={(value) => setState((prev) => ({ ...prev, squats: value }))}
-          placeholder="Reps"
+          placeholder="Max seconds"
         />
       );
     case "plank":
@@ -782,7 +795,8 @@ function ResultCard({
   onFetchMatches,
   waitlistError,
   waitlistLoading,
-  waitlistSubmitted
+  waitlistSubmitted,
+  revealReady
 }: {
   result: Result;
   onReset: () => void;
@@ -794,38 +808,74 @@ function ResultCard({
   waitlistError: string | null;
   waitlistLoading: boolean;
   waitlistSubmitted: boolean;
+  revealReady: boolean;
 }) {
+  const revealClass = revealReady
+    ? "opacity-100 scale-100"
+    : "opacity-0 scale-95";
+
   return (
     <div className="text-center">
       <div className="text-xs uppercase tracking-[0.3em] text-[#9aa6bf]">
         Your TiltFit Rank
       </div>
-      <h3 className="mt-3 text-3xl font-semibold">{result.rank}</h3>
-      <p className="mt-2 text-lg">
-        You are fitter than {result.weightedPercentile.toFixed(1)}% of people
-        your age.
-      </p>
-      <div className="mt-6 grid gap-3 text-sm text-[#9aa6bf] sm:grid-cols-2">
-        {Object.entries(result.breakdown).map(([key]) => (
-          <div key={key} className="rounded-xl border border-[#262d3a] px-4 py-3">
-            <span className="uppercase tracking-[0.2em] text-[0.65rem] text-[#9aa6bf]">
-              {key}
-            </span>
-            <div className="mt-1 text-sm text-[#9aa6bf]">
-              Rank: {result.categoryRanks[key as Metric]}
-            </div>
+      {!revealReady ? (
+        <div className="mt-6 rounded-xl border border-[#262d3a] bg-[#0f1320] px-4 py-5">
+          <div className="mx-auto mb-4 h-14 w-14 animate-pulse rounded-full bg-[#1a2030]" />
+          <p className="text-lg font-semibold text-[#e6ecf7]">
+            Loading your rank...
+          </p>
+          <p className="mt-2 text-sm text-[#9aa6bf]">
+            Calibrating your TiltFit profile.
+          </p>
+        </div>
+      ) : (
+        <div className={`transition-all duration-500 ${revealClass}`}>
+          <div className="mt-3 flex flex-col items-center gap-2">
+            <img
+              src={getRankIconSrc(result.rank)}
+              alt={`${result.rank} rank icon`}
+              className="h-32 w-32 rounded-full"
+            />
+            <h3 className="text-3xl font-semibold">{result.rank}</h3>
           </div>
-        ))}
-      </div>
-      <div className="mt-6 rounded-xl border border-[#262d3a] px-4 py-3">
-        <div className="text-xs uppercase tracking-[0.2em] text-[#9aa6bf]">
-          LoL Role Profile
+          <p className="mt-2 text-lg">
+            You are fitter than {result.weightedPercentile.toFixed(1)}% of people
+            your age.
+          </p>
+          <div className="mt-6 grid gap-3 text-sm text-[#9aa6bf] sm:grid-cols-2">
+            {Object.entries(result.breakdown).map(([key]) => (
+              <div
+                key={key}
+                className="rounded-xl border border-[#262d3a] px-4 py-3"
+              >
+            <span className="uppercase tracking-[0.2em] text-[0.65rem] text-[#9aa6bf]">
+              {getMetricLabel(key as Metric)}
+            </span>
+                <div className="mt-1 flex items-center justify-center gap-2 text-sm text-[#9aa6bf]">
+                  <img
+                    src={getRankIconSrc(result.categoryRanks[key as Metric])}
+                    alt={`${result.categoryRanks[key as Metric]} rank icon`}
+                    className="h-10 w-10 rounded-full"
+                  />
+                  <span>Rank: {result.categoryRanks[key as Metric]}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-6 rounded-xl border border-[#262d3a] px-4 py-3">
+            <div className="text-xs uppercase tracking-[0.2em] text-[#9aa6bf]">
+              LoL Role Profile
+            </div>
+            <div className="mt-2 text-lg font-semibold text-[#e6ecf7]">
+              {result.profile.role}
+            </div>
+            <p className="mt-1 text-sm text-[#9aa6bf]">
+              {result.profile.description}
+            </p>
+          </div>
         </div>
-        <div className="mt-2 text-lg font-semibold text-[#e6ecf7]">
-          {result.profile.role}
-        </div>
-        <p className="mt-1 text-sm text-[#9aa6bf]">{result.profile.description}</p>
-      </div>
+      )}
       <button
         className="mt-6 rounded-xl border border-[#262d3a] px-5 py-3 text-sm font-semibold text-[#e6ecf7]"
         type="button"
@@ -961,6 +1011,30 @@ function calculateResult(state: QuizState): Result {
   };
 }
 
+function getRankIconSrc(rank: string) {
+  const safeRank = rank.replace(/\s+/g, "");
+  return `/Ranks/${safeRank}.png`;
+}
+
+function getMetricLabel(metric: Metric) {
+  switch (metric) {
+    case "pushups":
+      return "Push-ups";
+    case "pullups":
+      return "Pull-ups";
+    case "squats":
+      return "Wall sit";
+    case "plank":
+      return "Plank";
+    case "run":
+      return "Run";
+    case "body":
+      return "Body comp";
+    default:
+      return metric;
+  }
+}
+
 function getChampionProfile({
   heightCm,
   weightKg,
@@ -977,29 +1051,64 @@ function getChampionProfile({
   const speedScore = breakdown.run;
   const bodyScore = breakdown.body;
 
-  const tall = heightCm >= 180;
-  const heavy = bmi >= 27 || weightKg >= 90;
+  const bmiBand =
+    bmi < 18.5 ? "under" : bmi < 25 ? "healthy" : bmi < 30 ? "over" : "obese";
+  const tall = heightCm >= 182;
+  const short = heightCm > 0 && heightCm <= 167;
+  const heavy = bmi >= 28 || weightKg >= 90;
 
-  if (strengthScore >= 70 && (heavy || tall) && speedScore <= 45) {
+  if (strengthScore >= 70 && (heavy || tall || bmiBand === "obese") && speedScore <= 55) {
     return {
       role: "Tank",
       description:
-        "High power and durability. You excel at raw strength and can soak up long sessions."
+        "High power and durability. You win long fights and shrug off tilt."
     };
   }
 
-  if (speedScore >= 70 && strengthScore >= 55 && bodyScore >= 60) {
+  if (strengthScore >= 62 && speedScore >= 45 && speedScore <= 70) {
+    return {
+      role: "Bruiser",
+      description:
+        "Balanced strength with solid pace. You trade blows and keep grinding."
+    };
+  }
+
+  if (speedScore >= 70 && strengthScore >= 50 && bmiBand === "healthy") {
     return {
       role: "Assassin",
       description:
-        "Fast, explosive, and efficient. You win with speed, precision, and clean reps."
+        "Fast, explosive, and efficient. You spike effort and reset quickly."
+    };
+  }
+
+  if (speedScore >= 65 && strengthScore < 55 && bmiBand === "healthy") {
+    return {
+      role: "Marksman",
+      description:
+        "Quick and precise. You win with clean reps and consistent tempo."
+    };
+  }
+
+  if (bodyScore >= 65 && strengthScore >= 45 && speedScore >= 45) {
+    return {
+      role: "Support",
+      description:
+        "Stable and consistent. You keep the team steady and build reliable gains."
+    };
+  }
+
+  if (short && speedScore >= 60) {
+    return {
+      role: "Assassin",
+      description:
+        "Compact and quick. You burst through sets and recover fast."
     };
   }
 
   return {
     role: "Mage",
     description:
-      "Balanced and consistent. You scale through smart pacing, control, and steady gains."
+      "Balanced and consistent. You scale through smart pacing and steady gains."
   };
 }
 

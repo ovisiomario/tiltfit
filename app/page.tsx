@@ -3,7 +3,7 @@ import QuizSection from "./components/QuizSection";
 export default function Home() {
   return (
     <main>
-      <section className="mx-auto grid w-full max-w-5xl items-center gap-10 px-4 py-16 lg:grid-cols-[1.2fr_0.8fr]">
+      <section className="mx-auto grid w-full max-w-6xl items-center gap-10 px-4 py-16 lg:grid-cols-[1.1fr_0.9fr]">
         <div>
           <div className="text-[0.7rem] uppercase tracking-[0.35em] text-[#9aa6bf]">
             TiltFit Challenge
@@ -21,19 +21,40 @@ export default function Home() {
           </p>
           <div className="mt-4 grid gap-3 text-[0.65rem] sm:grid-cols-3">
             <div className="rounded-lg border border-[#262d3a] bg-[#131722] px-3 py-2">
-              <p className="font-semibold text-[#e6ecf7]">Mario — Silver</p>
+              <div className="flex items-center gap-2 font-semibold text-[#e6ecf7]">
+                <img
+                  src="/Ranks/Silver.png"
+                  alt="Silver rank icon"
+                  className="h-5 w-5 rounded-full"
+                />
+                <span>Mario — Silver</span>
+              </div>
               <p className="mt-1 text-[#9aa6bf]">
                 "I used to tilt and waste time. Now every loss is training."
               </p>
             </div>
             <div className="rounded-lg border border-[#262d3a] bg-[#131722] px-3 py-2">
-              <p className="font-semibold text-[#e6ecf7]">David — Gold</p>
+              <div className="flex items-center gap-2 font-semibold text-[#e6ecf7]">
+                <img
+                  src="/Ranks/Gold.png"
+                  alt="Gold rank icon"
+                  className="h-5 w-5 rounded-full"
+                />
+                <span>David — Gold</span>
+              </div>
               <p className="mt-1 text-[#9aa6bf]">
                 "TiltFit turned my rage queues into real progress."
               </p>
             </div>
             <div className="rounded-lg border border-[#262d3a] bg-[#131722] px-3 py-2">
-              <p className="font-semibold text-[#e6ecf7]">Sergio — Platinum</p>
+              <div className="flex items-center gap-2 font-semibold text-[#e6ecf7]">
+                <img
+                  src="/Ranks/Platinum.png"
+                  alt="Platinum rank icon"
+                  className="h-5 w-5 rounded-full"
+                />
+                <span>Sergio — Platinum</span>
+              </div>
               <p className="mt-1 text-[#9aa6bf]">
                 "I stopped spiraling and started leveling up my fitness."
               </p>
@@ -41,15 +62,11 @@ export default function Home() {
           </div>
         </div>
         <div className="rounded-2xl border border-[#262d3a] bg-[#0f1320] p-2">
-          <video
+          <img
+            src="/TiltFit_Hero_Real.png"
+            alt="TiltFit transformation: tilt gamer to fitness victory"
             className="h-auto w-full rounded-2xl object-cover"
-            autoPlay
-            loop
-            muted
-            playsInline
-          >
-            <source src="/titfilt-video-hero.mp4" type="video/mp4" />
-          </video>
+          />
         </div>
       </section>
 
