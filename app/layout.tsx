@@ -9,6 +9,10 @@ export const metadata: Metadata = {
   title: "TiltFit - Respawn Stronger",
   description:
     "Respawn stronger with TiltFit. Generate your Fitness Rank, turn every League loss into workouts, and level up IRL."
+  ,
+  icons: {
+    icon: "/Tiltfit logo.png"
+  }
 };
 
 export default function RootLayout({
