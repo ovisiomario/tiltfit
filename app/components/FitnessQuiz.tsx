@@ -254,7 +254,16 @@ function getPercentile(
   const groups = norms[metric][sex];
   const ageGroup = getAgeGroup(groups, age);
   const percentile = interpolatePercentile(value, ageGroup.points, higherBetter);
-  return clamp(percentile, 0, 100);
+  const adjusted =
+    metric === "run"
+      ? applyRunEliteScale(value, ageGroup.points, sex, percentile)
+      : metric === "pushups" ||
+          metric === "pullups" ||
+          metric === "squats" ||
+          metric === "plank"
+        ? applyStrengthEliteScale(metric, value, ageGroup.points, percentile)
+        : percentile;
+  return clamp(adjusted, 0, 100);
 }
 
 function getBodyPercentile(
@@ -264,18 +273,21 @@ function getBodyPercentile(
   sex: Sex
 ): number {
   if (bodyFat !== null) {
-    return getPercentile("body", bodyFat, age, sex);
+    if (sex === "other") {
+      const male = scoreBodyFat(bodyFat, "male");
+      const female = scoreBodyFat(bodyFat, "female");
+      return (male + female) / 2;
+    }
+    return scoreBodyFat(bodyFat, sex);
   }
 
   if (sex === "other") {
-    const male = getBodyPercentile(null, bmi, age, "male");
-    const female = getBodyPercentile(null, bmi, age, "female");
+    const male = scoreBMI(bmi);
+    const female = scoreBMI(bmi);
     return (male + female) / 2;
   }
 
-  const groups = norms.bmi[sex];
-  const ageGroup = getAgeGroup(groups, age);
-  return clamp(interpolatePercentile(bmi, ageGroup.points, false), 0, 100);
+  return scoreBMI(bmi);
 }
 
 function computeWeightedPercentile(
@@ -302,6 +314,140 @@ function rankFromPercentile(percentile: number): string {
   if (percentile < 99) return "Master";
   if (percentile < 99.9) return "Grandmaster";
   return "Challenger";
+}
+
+function applyRunEliteScale(
+  secondsPerKm: number,
+  points: PercentilePoint[],
+  sex: Sex,
+  basePercentile: number
+) {
+  const recordSeconds =
+    sex === "male" ? 130 : sex === "female" ? 145 : 137.5;
+  const sorted = [...points].sort((a, b) => a.value - b.value);
+  const bestPoint = sorted[0];
+
+  if (recordSeconds >= bestPoint.value) return basePercentile;
+  if (secondsPerKm >= bestPoint.value) return basePercentile;
+
+  const ratio = clamp(
+    (bestPoint.value - secondsPerKm) / (bestPoint.value - recordSeconds),
+    0,
+    1
+  );
+  return clamp(
+    bestPoint.percentile + ratio * (100 - bestPoint.percentile),
+    0,
+    100
+  );
+}
+
+function applyStrengthEliteScale(
+  metric: Metric,
+  value: number,
+  points: PercentilePoint[],
+  basePercentile: number
+) {
+  const eliteCap = getEliteCap(metric);
+  const sorted = [...points].sort((a, b) => a.value - b.value);
+  const bestPoint = sorted[sorted.length - 1];
+
+  if (eliteCap <= bestPoint.value) return basePercentile;
+  if (value <= bestPoint.value) return basePercentile;
+
+  const ratio = clamp(
+    (value - bestPoint.value) / (eliteCap - bestPoint.value),
+    0,
+    1
+  );
+  return clamp(
+    bestPoint.percentile + ratio * (100 - bestPoint.percentile),
+    0,
+    100
+  );
+}
+
+function getEliteCap(metric: Metric) {
+  switch (metric) {
+    case "pushups":
+      return 150;
+    case "pullups":
+      return 60;
+    case "squats":
+      return 180;
+    case "plank":
+      return 600;
+    default:
+      return 0;
+  }
+}
+
+function scoreFromHealthyRange(
+  value: number,
+  min: number,
+  max: number,
+  maxDeviation: number
+) {
+  if (value <= 0) return 0;
+  const center = (min + max) / 2;
+  const halfRange = (max - min) / 2;
+  const distanceFromCenter = Math.abs(value - center);
+  if (distanceFromCenter <= halfRange) {
+    const ratio = distanceFromCenter / halfRange;
+    return clamp(100 - ratio * 15, 0, 100);
+  }
+  const distanceFromEdge = distanceFromCenter - halfRange;
+  const penaltyRatio = clamp(distanceFromEdge / maxDeviation, 0, 1);
+  return clamp(85 - penaltyRatio * 85, 0, 100);
+}
+
+function scoreBMI(bmi: number) {
+  return scoreFromLeanEnd(bmi, 18.5, 24.9, 12);
+}
+
+function scoreBodyFat(bodyFat: number, sex: Sex) {
+  if (sex === "male") {
+    return scoreFromLowerIsBetter(bodyFat, 8, 25, 25);
+  }
+  if (sex === "female") {
+    return scoreFromLowerIsBetter(bodyFat, 16, 35, 28);
+  }
+  return scoreFromLowerIsBetter(bodyFat, 12, 30, 26);
+}
+
+function scoreFromLeanEnd(
+  value: number,
+  min: number,
+  max: number,
+  maxDeviation: number
+) {
+  if (value <= 0) return 0;
+  if (value <= min) {
+    const ratio = clamp((min - value) / maxDeviation, 0, 1);
+    return clamp(100 - ratio * 60, 0, 100);
+  }
+  if (value <= max) {
+    const ratio = clamp((value - min) / (max - min), 0, 1);
+    return clamp(100 - ratio * 50, 0, 100);
+  }
+  const overRatio = clamp((value - max) / maxDeviation, 0, 1);
+  return clamp(50 - overRatio * 50, 0, 100);
+}
+
+function scoreFromLowerIsBetter(
+  value: number,
+  floor: number,
+  mid: number,
+  maxDeviation: number
+) {
+  if (value <= 0) return 0;
+  if (value <= floor) return 100;
+  if (value <= mid) {
+    const ratio = clamp((value - floor) / (mid - floor), 0, 1);
+    return clamp(100 - ratio * 40, 0, 100);
+  }
+  const overRatio = clamp((value - mid) / maxDeviation, 0, 1);
+  return clamp(60 - overRatio * 60, 0, 100);
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -449,24 +595,17 @@ export default function FitnessQuiz() {
             onEmailChange={setEmail}
             emailTouched={emailTouched}
             onEmailTouched={setEmailTouched}
-            onContinue={() => {
-              setEmailTouched(true);
-              if (!isValidEmail(email)) return;
-              setResult(pendingResult);
-              setPendingResult(null);
-            }}
-          />
-        </div>
-      ) : result ? (
-        <div className="w-full max-w-xl">
-          <ResultCard
-            result={result}
-            onReset={handleReset}
             riotId={riotId}
             riotRegion={riotRegion}
             onRiotIdChange={setRiotId}
             onRiotRegionChange={setRiotRegion}
-            onFetchMatches={async () => {
+            waitlistLoading={waitlistLoading}
+            waitlistError={waitlistError}
+            onContinue={async () => {
+              setEmailTouched(true);
+              if (!isValidEmail(email)) return;
+              if (!riotId.trim()) return;
+
               setWaitlistLoading(true);
               setWaitlistError(null);
               try {
@@ -477,8 +616,8 @@ export default function FitnessQuiz() {
                     email,
                     riotId,
                     riotRegion,
-                    weightedPercentile: result.weightedPercentile,
-                    rank: result.rank
+                    weightedPercentile: pendingResult.weightedPercentile,
+                    rank: pendingResult.rank
                   })
                 });
                 const payload = await response.json();
@@ -486,6 +625,8 @@ export default function FitnessQuiz() {
                   throw new Error(payload?.error ?? "Unable to save your entry.");
                 }
                 setWaitlistSubmitted(true);
+                setResult(pendingResult);
+                setPendingResult(null);
               } catch (error) {
                 setWaitlistError(
                   error instanceof Error ? error.message : "Something went wrong."
@@ -494,8 +635,13 @@ export default function FitnessQuiz() {
                 setWaitlistLoading(false);
               }
             }}
-            waitlistError={waitlistError}
-            waitlistLoading={waitlistLoading}
+          />
+        </div>
+      ) : result ? (
+        <div className="w-full max-w-xl">
+          <ResultCard
+            result={result}
+            onReset={handleReset}
             waitlistSubmitted={waitlistSubmitted}
             revealReady={revealReady}
           />
@@ -510,15 +656,28 @@ function EmailGate({
   onEmailChange,
   emailTouched,
   onEmailTouched,
+  riotId,
+  riotRegion,
+  onRiotIdChange,
+  onRiotRegionChange,
+  waitlistLoading,
+  waitlistError,
   onContinue
 }: {
   email: string;
   onEmailChange: (value: string) => void;
   emailTouched: boolean;
   onEmailTouched: (value: boolean) => void;
+  riotId: string;
+  riotRegion: string;
+  onRiotIdChange: (value: string) => void;
+  onRiotRegionChange: (value: string) => void;
+  waitlistLoading: boolean;
+  waitlistError: string | null;
   onContinue: () => void;
 }) {
   const valid = isValidEmail(email);
+  const riotValid = riotId.trim().length > 0;
 
   return (
     <div>
@@ -545,13 +704,55 @@ function EmailGate({
       {emailTouched && !valid ? (
         <p className="mt-3 text-sm text-[#ff6b6b]">Enter a valid email address.</p>
       ) : null}
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <label className="flex flex-col gap-2 text-sm font-semibold md:col-span-2">
+          Riot ID (Name#TAG)
+          <input
+            className="w-full rounded-xl border border-[#262d3a] bg-[#0f1320] px-4 py-3 text-sm text-[#e6ecf7]"
+            value={riotId}
+            onChange={(event) => onRiotIdChange(event.target.value)}
+            placeholder="Summoner#TAG"
+          />
+        </label>
+        <label className="flex flex-col gap-2 text-sm font-semibold">
+          Region
+          <select
+            className="w-full rounded-xl border border-[#262d3a] bg-[#0f1320] px-4 py-3 text-sm text-[#e6ecf7]"
+            value={riotRegion}
+            onChange={(event) => onRiotRegionChange(event.target.value)}
+          >
+            <option value="NA1">NA</option>
+            <option value="EUW1">EUW</option>
+            <option value="EUN1">EUNE</option>
+            <option value="KR">KR</option>
+            <option value="BR1">BR</option>
+            <option value="LA1">LAN</option>
+            <option value="LA2">LAS</option>
+            <option value="OC1">OCE</option>
+            <option value="JP1">JP</option>
+            <option value="RU">RU</option>
+            <option value="TR1">TR</option>
+          </select>
+        </label>
+      </div>
+      {emailTouched && !riotValid ? (
+        <p className="mt-3 text-sm text-[#ff6b6b]">Enter your Riot ID.</p>
+      ) : null}
       <button
         className="mt-4 rounded-xl bg-gradient-to-r from-[#6cffb1] to-[#67a7ff] px-6 py-3 text-sm font-bold text-[#07111e] shadow-[0_14px_30px_rgba(90,255,190,0.22)]"
         type="button"
         onClick={onContinue}
+        disabled={waitlistLoading}
       >
-        Reveal my rank
+        {waitlistLoading ? "Saving..." : "See my rank"}
       </button>
+      <p className="mt-2 text-xs text-[#9aa6bf]">
+        You will join the waitlist for when the full product is ready and be
+        contacted to try it free as an early adopter.
+      </p>
+      {waitlistError ? (
+        <p className="mt-3 text-sm text-[#ff6b6b]">{waitlistError}</p>
+      ) : null}
     </div>
   );
 }
@@ -788,25 +989,11 @@ function SelectField({
 function ResultCard({
   result,
   onReset,
-  riotId,
-  riotRegion,
-  onRiotIdChange,
-  onRiotRegionChange,
-  onFetchMatches,
-  waitlistError,
-  waitlistLoading,
   waitlistSubmitted,
   revealReady
 }: {
   result: Result;
   onReset: () => void;
-  riotId: string;
-  riotRegion: string;
-  onRiotIdChange: (value: string) => void;
-  onRiotRegionChange: (value: string) => void;
-  onFetchMatches: () => void;
-  waitlistError: string | null;
-  waitlistLoading: boolean;
   waitlistSubmitted: boolean;
   revealReady: boolean;
 }) {
@@ -884,75 +1071,19 @@ function ResultCard({
         Retake quiz
       </button>
       <div className="mt-8 rounded-2xl border border-[#262d3a] bg-[#0f1320] p-5">
-        {waitlistSubmitted ? (
-          <div className="text-center">
-            <div className="text-xs uppercase tracking-[0.3em] text-[#9aa6bf]">
-              Waitlist Locked
-            </div>
-            <h4 className="mt-3 text-xl font-semibold">Thanks for queueing up</h4>
-            <p className="mt-2">
-              We're collecting interest while we build the full League sync.
-              You'll be the first to know, and you'll get the app free for being
-              early.
-            </p>
-            <p className="mt-3 text-sm text-[#9aa6bf]">
-              GG WP. We'll ping you when the challenge goes live.
-            </p>
+        <div className="text-center">
+          <div className="text-xs uppercase tracking-[0.3em] text-[#9aa6bf]">
+            {waitlistSubmitted ? "Waitlist Locked" : "Waitlist"}
           </div>
-        ) : (
-          <>
-            <div className="text-xs uppercase tracking-[0.3em] text-[#9aa6bf]">
-              Start the TiltFit Challenge
-            </div>
-            <h4 className="mt-3 text-xl font-semibold">Connect your Riot account</h4>
-            <p className="mt-2">
-              Add your Riot ID so we can pull your match history and turn every loss
-              into workouts.
-            </p>
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <label className="flex flex-col gap-2 text-sm font-semibold md:col-span-2">
-                Riot ID (Name#TAG)
-                <input
-                  className="w-full rounded-xl border border-[#262d3a] bg-[#0f1320] px-4 py-3 text-sm text-[#e6ecf7]"
-                  value={riotId}
-                  onChange={(event) => onRiotIdChange(event.target.value)}
-                  placeholder="Summoner#TAG"
-                />
-              </label>
-              <label className="flex flex-col gap-2 text-sm font-semibold">
-                Region
-                <select
-                  className="w-full rounded-xl border border-[#262d3a] bg-[#0f1320] px-4 py-3 text-sm text-[#e6ecf7]"
-                  value={riotRegion}
-                  onChange={(event) => onRiotRegionChange(event.target.value)}
-                >
-                  <option value="NA1">NA</option>
-                  <option value="EUW1">EUW</option>
-                  <option value="EUN1">EUNE</option>
-                  <option value="KR">KR</option>
-                  <option value="BR1">BR</option>
-                  <option value="LA1">LAN</option>
-                  <option value="LA2">LAS</option>
-                  <option value="OC1">OCE</option>
-                  <option value="JP1">JP</option>
-                  <option value="RU">RU</option>
-                  <option value="TR1">TR</option>
-                </select>
-              </label>
-            </div>
-            <button
-              className="mt-4 rounded-xl bg-gradient-to-r from-[#6cffb1] to-[#67a7ff] px-6 py-3 text-sm font-bold text-[#07111e] shadow-[0_14px_30px_rgba(90,255,190,0.22)]"
-              type="button"
-              onClick={onFetchMatches}
-              disabled={waitlistLoading || riotId.trim().length === 0}
-            >
-              {waitlistLoading ? "Saving..." : "Join the waitlist"}
-            </button>
-            {waitlistError ? (
-              <p className="mt-3 text-sm text-[#ff6b6b]">{waitlistError}</p>
-            ) : null}
-          </>
-        )}
+          <h4 className="mt-3 text-xl font-semibold">Thanks for queueing up</h4>
+          <p className="mt-2">
+            We're collecting interest while we build the full League sync. You'll
+            be the first to know, and you'll get the app free for being early.
+          </p>
+          <p className="mt-3 text-sm text-[#9aa6bf]">
+            GG WP. We'll ping you when the challenge goes live.
+          </p>
+        </div>
       </div>
       <p className="mt-6 text-xs text-[#9aa6bf]">
         Estimates only, not medical advice. Use what feels safe for your body.
